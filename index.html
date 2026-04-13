@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CPS Tester & Consistency Tester</title>
+    <title>Pro CPS Tester</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -127,10 +127,10 @@
         const resetBtn = document.getElementById('reset-btn');
         const promptText = document.getElementById('prompt-text');
 
-        // Audio System
+        // Audio System - Instant Play Implementation
         const SFX_URL = 'assets/sfx.m4a';
         const audioPool = [];
-        const POOL_SIZE = 15; // Allows overlapping sounds for rapid clicking
+        const POOL_SIZE = 20; // Increased pool for ultra-fast clicking
 
         for (let i = 0; i < POOL_SIZE; i++) {
             const audio = new Audio(SFX_URL);
@@ -138,12 +138,25 @@
             audioPool.push(audio);
         }
 
-        let currentAudioIndex = 0;
+        /**
+         * Finds the first available audio object that is paused or finished.
+         * If all are playing, it resets the oldest one to play immediately.
+         */
         function playSfx() {
-            const audio = audioPool[currentAudioIndex];
+            // Find an audio element that isn't currently playing
+            let audio = audioPool.find(a => a.paused || a.ended);
+            
+            // Fallback: If all are busy, force restart the first one (prevents "queueing")
+            if (!audio) {
+                audio = audioPool[0];
+            }
+
             audio.currentTime = 0;
-            audio.play().catch(() => { /* Initial click required by browsers */ });
-            currentAudioIndex = (currentAudioIndex + 1) % POOL_SIZE;
+            // Use play promise to handle potential browser race conditions
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(() => { /* Auto-play block handling */ });
+            }
         }
 
         let clickTimestamps = [];
@@ -164,7 +177,7 @@
         function registerClick(e) {
             const now = performance.now();
             
-            // Visual & Audio Feedback
+            // Instant Audio & Visual Feedback
             playSfx();
             createRipple(e);
             
@@ -282,7 +295,7 @@
                 } else {
                     keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
                 }
-                // SFX on Release
+                // SFX on Instant Release
                 playSfx();
             }
         });
@@ -291,7 +304,6 @@
             registerClick(e);
         });
 
-        // SFX on mouse release
         clickTarget.addEventListener('mouseup', () => {
             playSfx();
         });
