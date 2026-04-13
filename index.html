@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro CPS Tester</title>
+    <title>CPS Tester & Consistency Tester</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
@@ -127,6 +127,25 @@
         const resetBtn = document.getElementById('reset-btn');
         const promptText = document.getElementById('prompt-text');
 
+        // Audio System
+        const SFX_URL = 'assets/sfx.m4a';
+        const audioPool = [];
+        const POOL_SIZE = 15; // Allows overlapping sounds for rapid clicking
+
+        for (let i = 0; i < POOL_SIZE; i++) {
+            const audio = new Audio(SFX_URL);
+            audio.preload = 'auto';
+            audioPool.push(audio);
+        }
+
+        let currentAudioIndex = 0;
+        function playSfx() {
+            const audio = audioPool[currentAudioIndex];
+            audio.currentTime = 0;
+            audio.play().catch(() => { /* Initial click required by browsers */ });
+            currentAudioIndex = (currentAudioIndex + 1) % POOL_SIZE;
+        }
+
         let clickTimestamps = [];
         let intervals = [];
         let maxCps = 0;
@@ -145,7 +164,8 @@
         function registerClick(e) {
             const now = performance.now();
             
-            // Visual Feedback
+            // Visual & Audio Feedback
+            playSfx();
             createRipple(e);
             
             // Logic
@@ -158,7 +178,6 @@
             if (lastClickTime !== 0) {
                 const interval = now - lastClickTime;
                 intervals.push(interval);
-                // Keep only last 50 intervals for consistency calculation
                 if (intervals.length > 50) intervals.shift();
             }
 
@@ -171,7 +190,6 @@
             const ripple = document.createElement('div');
             ripple.className = 'ripple';
             
-            // Handle both touch/mouse and keyboard (centered)
             const rect = clickTarget.getBoundingClientRect();
             let x, y;
 
@@ -194,15 +212,11 @@
 
         function updateStats() {
             const now = performance.now();
-            // Filter timestamps within the last 1 second
             clickTimestamps = clickTimestamps.filter(t => now - t < 1000);
             
             const currentCps = clickTimestamps.length;
             if (currentCps > maxCps) maxCps = currentCps;
 
-            // Consistency Calculation
-            // Consistency % = 100 - (Coefficient of Variation)
-            // CV = (Standard Deviation / Mean) * 100
             let consistency = 100;
             if (intervals.length > 5) {
                 const mean = intervals.reduce((a, b) => a + b) / intervals.length;
@@ -212,20 +226,17 @@
                 consistency = Math.max(0, Math.min(100, 100 - (cv * 100)));
             }
 
-            // UI Updates
             cpsDisplay.innerText = currentCps.toFixed(1);
             maxCpsDisplay.innerText = maxCps.toFixed(1);
             consistencyDisplay.innerText = Math.round(consistency) + "%";
             totalClicksDisplay.innerText = parseInt(totalClicksDisplay.innerText) + 1;
 
-            // Visualizer update
             const barIdx = Math.floor((now / 50) % BAR_COUNT);
             const height = Math.min(100, currentCps * 8);
             bars[barIdx].style.height = `${height}%`;
             bars[barIdx].style.opacity = '1';
         }
 
-        // Decay function to handle CPS dropping when not clicking
         setInterval(() => {
             const now = performance.now();
             const oldLength = clickTimestamps.length;
@@ -242,7 +253,6 @@
                 }
             }
 
-            // Dim old bars
             bars.forEach(bar => {
                 const currentOpacity = parseFloat(getComputedStyle(bar).opacity);
                 if (currentOpacity > 0.1) {
@@ -266,15 +276,24 @@
         });
 
         window.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'w') {
-                keyW.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-            } else if (e.key === 'ArrowUp') {
-                keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
+            if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
+                if (e.key.toLowerCase() === 'w') {
+                    keyW.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
+                } else {
+                    keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
+                }
+                // SFX on Release
+                playSfx();
             }
         });
 
         clickTarget.addEventListener('mousedown', (e) => {
             registerClick(e);
+        });
+
+        // SFX on mouse release
+        clickTarget.addEventListener('mouseup', () => {
+            playSfx();
         });
 
         resetBtn.addEventListener('click', () => {
