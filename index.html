@@ -3,290 +3,367 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro CPS Tester</title>
+    <title>Pro CPS Tester - Configurable</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
+            background-color: #020617;
             color: #f8fafc;
             overflow: hidden;
             touch-action: manipulation;
         }
 
-        .click-area {
-            transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
+        .stage {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 0;
+            overflow: hidden;
         }
 
-        .click-area:active, .key-active {
-            transform: scale(0.98);
-            background-color: #1e293b;
+        .orb {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, #38bdf8 0%, #0ea5e9 100%);
+            border-radius: 50%;
+            filter: blur(20px);
+            box-shadow: 0 0 60px rgba(56, 189, 248, 0.4);
+            transition: transform 0.1s cubic-bezier(0.2, 0, 0.2, 1);
+            will-change: transform;
+        }
+
+        .grid-bg {
+            background-image: linear-gradient(#1e293b 1px, transparent 1px), linear-gradient(90deg, #1e293b 1px, transparent 1px);
+            background-size: 40px 40px;
+            position: absolute;
+            inset: 0;
+            opacity: 0.2;
         }
 
         .stat-card {
-            background: rgba(30, 41, 59, 0.5);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 10;
         }
 
         #visualizer {
-            height: 100px;
+            height: 60px;
             display: flex;
             align-items: flex-end;
-            gap: 2px;
+            gap: 1px;
+            z-index: 10;
         }
 
         .bar {
             flex: 1;
             background: #38bdf8;
             min-height: 2px;
-            transition: height 0.2s ease;
-            border-radius: 2px 2px 0 0;
+            transition: height 0.1s ease;
+            opacity: 0.3;
         }
 
-        @keyframes ripple {
-            to {
-                transform: scale(4);
-                opacity: 0;
-            }
+        .active-key {
+            border-color: #38bdf8 !important;
+            color: #38bdf8 !important;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            transform: scale(0.95);
         }
 
-        .ripple {
-            position: absolute;
-            background: rgba(56, 189, 248, 0.3);
-            border-radius: 50%;
-            transform: scale(0);
-            animation: ripple 0.6s linear;
-            pointer-events: none;
+        .config-panel {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            z-index: 50;
+        }
+
+        .binding-btn {
+            transition: all 0.2s;
+        }
+
+        .binding-active {
+            border-color: #38bdf8 !important;
+            background: rgba(56, 189, 248, 0.1);
+            color: #38bdf8;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4">
+<body class="flex flex-col items-center justify-between min-h-screen p-6 select-none">
 
-    <div class="max-w-3xl w-full space-y-6">
-        <!-- Header -->
+    <!-- Config Modal -->
+    <div id="config-modal" class="hidden fixed inset-0 flex items-center justify-center z-[100] bg-black/60 backdrop-blur-sm">
+        <div class="config-panel p-8 rounded-3xl w-80 text-center space-y-6">
+            <h3 class="text-xl font-bold text-sky-400 uppercase tracking-widest">Key Bindings</h3>
+            <div class="space-y-4">
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs text-slate-500 uppercase font-bold">Key 1</span>
+                    <button id="bind-key-1" class="binding-btn py-4 bg-slate-900 border-2 border-slate-700 rounded-xl font-mono text-xl">W</button>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs text-slate-500 uppercase font-bold">Key 2</span>
+                    <button id="bind-key-2" class="binding-btn py-4 bg-slate-900 border-2 border-slate-700 rounded-xl font-mono text-xl">ArrowUp</button>
+                </div>
+            </div>
+            <button id="close-config" class="w-full py-2 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl mt-4">DONE</button>
+        </div>
+    </div>
+
+    <div class="stage">
+        <div class="grid-bg"></div>
+        <div id="orb" class="orb"></div>
+    </div>
+
+    <!-- Top Stats -->
+    <div class="max-w-4xl w-full grid grid-cols-3 gap-4 relative z-10">
+        <div class="stat-card p-4 rounded-2xl text-center">
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">CPS</p>
+            <div id="cps-val" class="text-4xl font-800 text-white">0.0</div>
+        </div>
+        <div class="stat-card p-4 rounded-2xl text-center border-b-2 border-sky-500/30">
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">Consistency</p>
+            <div id="consistency-val" class="text-4xl font-800 text-sky-400">100%</div>
+        </div>
+        <div class="stat-card p-4 rounded-2xl text-center">
+            <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mb-1">Peak</p>
+            <div id="max-cps-val" class="text-4xl font-800 text-amber-400">0.0</div>
+        </div>
+    </div>
+
+    <!-- Central Interaction Zone -->
+    <div id="main-zone" class="w-full flex flex-col items-center justify-center space-y-8 z-10">
         <div class="text-center">
-            <h1 class="text-4xl font-800 tracking-tight text-sky-400">CPS TESTER</h1>
-            <p class="text-slate-400 mt-2">Press <kbd class="px-2 py-1 bg-slate-800 rounded border border-slate-600 text-xs">W</kbd> or <kbd class="px-2 py-1 bg-slate-800 rounded border border-slate-600 text-xs">↑ Arrow</kbd> to start</p>
+            <h2 id="status-text" class="text-xl font-semibold text-slate-500 transition-colors">READY</h2>
         </div>
 
-        <!-- Main Display -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="stat-card p-6 rounded-2xl text-center">
-                <p class="text-slate-400 text-sm font-semibold mb-1 uppercase tracking-wider">Current CPS</p>
-                <div id="cps-val" class="text-5xl font-800 text-white">0.0</div>
-            </div>
-            <div class="stat-card p-6 rounded-2xl text-center">
-                <p class="text-slate-400 text-sm font-semibold mb-1 uppercase tracking-wider">Consistency</p>
-                <div id="consistency-val" class="text-5xl font-800 text-emerald-400">100%</div>
-            </div>
-            <div class="stat-card p-6 rounded-2xl text-center">
-                <p class="text-slate-400 text-sm font-semibold mb-1 uppercase tracking-wider">Max CPS</p>
-                <div id="max-cps-val" class="text-5xl font-800 text-amber-400">0.0</div>
-            </div>
+        <div class="flex gap-6">
+            <div id="ui-key-1" class="w-20 h-20 rounded-2xl border-2 border-slate-800 flex items-center justify-center text-xl font-800 text-slate-700 transition-all uppercase">W</div>
+            <div id="ui-key-2" class="w-20 h-20 rounded-2xl border-2 border-slate-800 flex items-center justify-center text-xl font-800 text-slate-700 transition-all uppercase">↑</div>
         </div>
+    </div>
 
-        <!-- Visualizer -->
-        <div id="visualizer" class="w-full bg-slate-900/50 rounded-xl overflow-hidden px-2"></div>
-
-        <!-- Click Surface -->
-        <div id="click-target" class="click-area relative w-full h-64 bg-slate-800/40 border-2 border-dashed border-slate-700 rounded-3xl flex flex-col items-center justify-center cursor-pointer select-none">
-            <div class="text-center z-10">
-                <div id="prompt-text" class="text-2xl font-semibold text-slate-500">Tap Keys to Start</div>
-                <div id="timer-display" class="hidden text-slate-300 mt-2">Test active...</div>
+    <!-- Bottom Data -->
+    <div class="max-w-4xl w-full space-y-4 relative z-10">
+        <div id="visualizer" class="w-full bg-slate-900/30 rounded-lg overflow-hidden"></div>
+        
+        <div class="flex justify-between items-center">
+            <div class="text-slate-500 text-sm">TOTAL ACTIONS: <span id="total-clicks" class="font-mono text-slate-300">0</span></div>
+            <div class="flex gap-3">
+                <button id="open-config" class="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-all border border-slate-800">CONFIG</button>
+                <button id="reset-btn" class="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-all border border-slate-800">RESET</button>
             </div>
-            <!-- Key visual cues -->
-            <div class="absolute bottom-6 flex gap-4">
-                <div id="key-w" class="w-12 h-12 rounded-lg border-2 border-slate-700 flex items-center justify-center font-bold text-slate-600">W</div>
-                <div id="key-up" class="w-12 h-12 rounded-lg border-2 border-slate-700 flex items-center justify-center font-bold text-slate-600">↑</div>
-            </div>
-        </div>
-
-        <!-- Controls -->
-        <div class="flex justify-between items-center px-2">
-            <div class="text-slate-500 text-sm">
-                Total Clicks: <span id="total-clicks" class="text-slate-300 font-mono">0</span>
-            </div>
-            <button id="reset-btn" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full text-sm font-semibold transition-colors">
-                Reset Stats
-            </button>
         </div>
     </div>
 
     <script>
-        const clickTarget = document.getElementById('click-target');
-        const cpsDisplay = document.getElementById('cps-val');
-        const maxCpsDisplay = document.getElementById('max-cps-val');
-        const consistencyDisplay = document.getElementById('consistency-val');
-        const totalClicksDisplay = document.getElementById('total-clicks');
-        const visualizer = document.getElementById('visualizer');
-        const keyW = document.getElementById('key-w');
-        const keyUp = document.getElementById('key-up');
-        const resetBtn = document.getElementById('reset-btn');
-        const promptText = document.getElementById('prompt-text');
+        const state = {
+            config: {
+                key1: 'w',
+                key2: 'arrowup',
+                isBinding: null // 'key1' or 'key2'
+            },
+            activeActions: 0,
+            lastActionTime: performance.now(),
+            actionTimestamps: [],
+            intervals: [],
+            maxCps: 0,
+            totalActions: 0,
+            isActive: false,
+            orbOffset: 0,
+            targetOffset: 0
+        };
 
-        let clickTimestamps = [];
-        let intervals = [];
-        let maxCps = 0;
-        let isActive = false;
-        let lastClickTime = 0;
+        const DOM = {
+            orb: document.getElementById('orb'),
+            cps: document.getElementById('cps-val'),
+            maxCps: document.getElementById('max-cps-val'),
+            consistency: document.getElementById('consistency-val'),
+            total: document.getElementById('total-clicks'),
+            visualizer: document.getElementById('visualizer'),
+            uiKey1: document.getElementById('ui-key-1'),
+            uiKey2: document.getElementById('ui-key-2'),
+            reset: document.getElementById('reset-btn'),
+            status: document.getElementById('status-text'),
+            configModal: document.getElementById('config-modal'),
+            openConfig: document.getElementById('open-config'),
+            closeConfig: document.getElementById('close-config'),
+            btnBind1: document.getElementById('bind-key-1'),
+            btnBind2: document.getElementById('bind-key-2')
+        };
 
-        // Initialize Visualizer Bars
-        const BAR_COUNT = 60;
+        // Initialize Visualizer
+        const BAR_COUNT = 80;
         for (let i = 0; i < BAR_COUNT; i++) {
             const bar = document.createElement('div');
             bar.className = 'bar';
-            visualizer.appendChild(bar);
+            DOM.visualizer.appendChild(bar);
         }
-        const bars = document.querySelectorAll('.bar');
+        const bars = Array.from(document.querySelectorAll('.bar'));
 
-        function registerClick(e) {
+        function updateBindingUI() {
+            DOM.btnBind1.innerText = state.config.key1;
+            DOM.btnBind2.innerText = state.config.key2;
+            DOM.uiKey1.innerText = state.config.key1 === ' ' ? 'SPC' : state.config.key1.replace('arrow', '');
+            DOM.uiKey2.innerText = state.config.key2 === ' ' ? 'SPC' : state.config.key2.replace('arrow', '');
+        }
+
+        function handleInput(isPress) {
             const now = performance.now();
+            state.totalActions++;
             
-            // Visual Feedback
-            createRipple(e);
-            
-            // Logic
-            if (!isActive) {
-                isActive = true;
-                promptText.innerText = "Clicking!";
-                promptText.classList.replace('text-slate-500', 'text-sky-400');
-            }
-
-            if (lastClickTime !== 0) {
-                const interval = now - lastClickTime;
-                intervals.push(interval);
-                // Keep only last 50 intervals for consistency calculation
-                if (intervals.length > 50) intervals.shift();
-            }
-
-            clickTimestamps.push(now);
-            lastClickTime = now;
-            updateStats();
-        }
-
-        function createRipple(e) {
-            const ripple = document.createElement('div');
-            ripple.className = 'ripple';
-            
-            // Handle both touch/mouse and keyboard (centered)
-            const rect = clickTarget.getBoundingClientRect();
-            let x, y;
-
-            if (e && e.clientX) {
-                x = e.clientX - rect.left;
-                y = e.clientY - rect.top;
+            if (isPress) {
+                state.activeActions++;
+                state.targetOffset = -45;
             } else {
-                x = rect.width / 2;
-                y = rect.height / 2;
+                state.activeActions = Math.max(0, state.activeActions - 1);
+                state.targetOffset = (state.activeActions > 0) ? -45 : 45;
             }
 
-            ripple.style.left = `${x}px`;
-            ripple.style.top = `${y}px`;
-            ripple.style.width = ripple.style.height = `100px`;
-            ripple.style.marginLeft = ripple.style.marginTop = `-50px`;
+            if (!state.isActive) {
+                state.isActive = true;
+                DOM.status.innerText = "ACTIVE";
+                DOM.status.classList.replace('text-slate-500', 'text-sky-400');
+            }
 
-            clickTarget.appendChild(ripple);
-            setTimeout(() => ripple.remove(), 600);
+            const interval = now - state.lastActionTime;
+            state.intervals.push(interval);
+            if (state.intervals.length > 60) state.intervals.shift();
+
+            state.actionTimestamps.push(now);
+            state.lastActionTime = now;
+            
+            updateStats(now);
         }
 
-        function updateStats() {
-            const now = performance.now();
-            // Filter timestamps within the last 1 second
-            clickTimestamps = clickTimestamps.filter(t => now - t < 1000);
-            
-            const currentCps = clickTimestamps.length;
-            if (currentCps > maxCps) maxCps = currentCps;
+        function updateStats(now) {
+            state.actionTimestamps = state.actionTimestamps.filter(t => now - t < 1000);
+            const currentCps = state.actionTimestamps.length;
+            if (currentCps > state.maxCps) state.maxCps = currentCps;
 
-            // Consistency Calculation
-            // Consistency % = 100 - (Coefficient of Variation)
-            // CV = (Standard Deviation / Mean) * 100
             let consistency = 100;
-            if (intervals.length > 5) {
-                const mean = intervals.reduce((a, b) => a + b) / intervals.length;
-                const variance = intervals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / intervals.length;
+            if (state.intervals.length > 5) {
+                const mean = state.intervals.reduce((a, b) => a + b) / state.intervals.length;
+                const variance = state.intervals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / state.intervals.length;
                 const stdDev = Math.sqrt(variance);
-                const cv = (stdDev / mean);
-                consistency = Math.max(0, Math.min(100, 100 - (cv * 100)));
+                const cv = stdDev / mean;
+                const rhythmScore = Math.max(0, 100 - (cv * 120));
+                const balanceScore = 100 - (Math.abs(state.targetOffset) / 45) * 20; 
+                consistency = (rhythmScore * 0.8) + (balanceScore * 0.2);
             }
 
-            // UI Updates
-            cpsDisplay.innerText = currentCps.toFixed(1);
-            maxCpsDisplay.innerText = maxCps.toFixed(1);
-            consistencyDisplay.innerText = Math.round(consistency) + "%";
-            totalClicksDisplay.innerText = parseInt(totalClicksDisplay.innerText) + 1;
+            DOM.cps.innerText = currentCps.toFixed(1);
+            DOM.maxCps.innerText = state.maxCps.toFixed(1);
+            DOM.consistency.innerText = Math.round(consistency) + "%";
+            DOM.total.innerText = state.totalActions;
 
-            // Visualizer update
-            const barIdx = Math.floor((now / 50) % BAR_COUNT);
-            const height = Math.min(100, currentCps * 8);
-            bars[barIdx].style.height = `${height}%`;
+            const barIdx = Math.floor((now / 30) % BAR_COUNT);
+            bars[barIdx].style.height = `${Math.min(100, currentCps * 4)}%`;
             bars[barIdx].style.opacity = '1';
         }
 
-        // Decay function to handle CPS dropping when not clicking
-        setInterval(() => {
+        function animate() {
+            state.orbOffset += (state.targetOffset - state.orbOffset) * 0.15;
+            DOM.orb.style.transform = `translateY(${state.orbOffset}px)`;
+
             const now = performance.now();
-            const oldLength = clickTimestamps.length;
-            clickTimestamps = clickTimestamps.filter(t => now - t < 1000);
-            
-            if (clickTimestamps.length !== oldLength || clickTimestamps.length === 0) {
-                cpsDisplay.innerText = clickTimestamps.length.toFixed(1);
-                
-                if (clickTimestamps.length === 0 && isActive) {
-                    promptText.innerText = "Stopped";
-                    promptText.classList.replace('text-sky-400', 'text-slate-500');
-                    isActive = false;
-                    lastClickTime = 0;
-                }
+            if (state.isActive && now - state.lastActionTime > 1000) {
+                state.isActive = false;
+                state.targetOffset = 0;
+                DOM.status.innerText = "STOPPED";
+                DOM.status.classList.replace('text-sky-400', 'text-slate-500');
             }
 
-            // Dim old bars
             bars.forEach(bar => {
-                const currentOpacity = parseFloat(getComputedStyle(bar).opacity);
-                if (currentOpacity > 0.1) {
-                    bar.style.opacity = (currentOpacity - 0.02).toString();
-                }
+                const op = parseFloat(getComputedStyle(bar).opacity);
+                if (op > 0.3) bar.style.opacity = (op - 0.01).toString();
             });
-        }, 50);
+
+            requestAnimationFrame(animate);
+        }
 
         // Input Listeners
         window.addEventListener('keydown', (e) => {
+            if (state.config.isBinding) {
+                e.preventDefault();
+                state.config[state.config.isBinding] = e.key.toLowerCase();
+                state.config.isBinding = null;
+                DOM.btnBind1.classList.remove('binding-active');
+                DOM.btnBind2.classList.remove('binding-active');
+                updateBindingUI();
+                return;
+            }
+
             if (e.repeat) return;
-            
-            if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
-                if (e.key.toLowerCase() === 'w') {
-                    keyW.classList.add('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-                } else {
-                    keyUp.classList.add('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-                }
-                registerClick(null);
+            const key = e.key.toLowerCase();
+            if (key === state.config.key1 || key === state.config.key2) {
+                if (key === state.config.key1) DOM.uiKey1.classList.add('active-key');
+                if (key === state.config.key2) DOM.uiKey2.classList.add('active-key');
+                handleInput(true);
             }
         });
 
         window.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'w') {
-                keyW.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-            } else if (e.key === 'ArrowUp') {
-                keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
+            if (state.config.isBinding) return;
+            const key = e.key.toLowerCase();
+            if (key === state.config.key1 || key === state.config.key2) {
+                if (key === state.config.key1) DOM.uiKey1.classList.remove('active-key');
+                if (key === state.config.key2) DOM.uiKey2.classList.remove('active-key');
+                handleInput(false);
             }
         });
 
-        clickTarget.addEventListener('mousedown', (e) => {
-            registerClick(e);
+        // UI Event Listeners
+        DOM.openConfig.addEventListener('click', () => {
+            DOM.configModal.classList.remove('hidden');
         });
 
-        resetBtn.addEventListener('click', () => {
-            clickTimestamps = [];
-            intervals = [];
-            maxCps = 0;
-            totalClicksDisplay.innerText = "0";
-            cpsDisplay.innerText = "0.0";
-            maxCpsDisplay.innerText = "0.0";
-            consistencyDisplay.innerText = "100%";
+        DOM.closeConfig.addEventListener('click', () => {
+            DOM.configModal.classList.add('hidden');
+            state.config.isBinding = null;
+            DOM.btnBind1.classList.remove('binding-active');
+            DOM.btnBind2.classList.remove('binding-active');
+        });
+
+        DOM.btnBind1.addEventListener('click', () => {
+            state.config.isBinding = 'key1';
+            DOM.btnBind1.classList.add('binding-active');
+            DOM.btnBind2.classList.remove('binding-active');
+            DOM.btnBind1.innerText = 'PRESS KEY...';
+        });
+
+        DOM.btnBind2.addEventListener('click', () => {
+            state.config.isBinding = 'key2';
+            DOM.btnBind2.classList.add('binding-active');
+            DOM.btnBind1.classList.remove('binding-active');
+            DOM.btnBind2.innerText = 'PRESS KEY...';
+        });
+
+        DOM.reset.addEventListener('click', () => {
+            state.actionTimestamps = [];
+            state.intervals = [];
+            state.maxCps = 0;
+            state.totalActions = 0;
+            state.targetOffset = 0;
+            DOM.cps.innerText = "0.0";
+            DOM.maxCps.innerText = "0.0";
+            DOM.consistency.innerText = "100%";
+            DOM.total.innerText = "0";
             bars.forEach(b => b.style.height = '2px');
         });
+
+        // Initialize UI and loop
+        updateBindingUI();
+        requestAnimationFrame(animate);
     </script>
 </body>
 </html>
