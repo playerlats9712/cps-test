@@ -127,38 +127,6 @@
         const resetBtn = document.getElementById('reset-btn');
         const promptText = document.getElementById('prompt-text');
 
-        // Audio System - Instant Play Implementation
-        const SFX_URL = 'assets/sfx.m4a';
-        const audioPool = [];
-        const POOL_SIZE = 20; // Increased pool for ultra-fast clicking
-
-        for (let i = 0; i < POOL_SIZE; i++) {
-            const audio = new Audio(SFX_URL);
-            audio.preload = 'auto';
-            audioPool.push(audio);
-        }
-
-        /**
-         * Finds the first available audio object that is paused or finished.
-         * If all are playing, it resets the oldest one to play immediately.
-         */
-        function playSfx() {
-            // Find an audio element that isn't currently playing
-            let audio = audioPool.find(a => a.paused || a.ended);
-            
-            // Fallback: If all are busy, force restart the first one (prevents "queueing")
-            if (!audio) {
-                audio = audioPool[0];
-            }
-
-            audio.currentTime = 0;
-            // Use play promise to handle potential browser race conditions
-            const playPromise = audio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(() => { /* Auto-play block handling */ });
-            }
-        }
-
         let clickTimestamps = [];
         let intervals = [];
         let maxCps = 0;
@@ -177,8 +145,7 @@
         function registerClick(e) {
             const now = performance.now();
             
-            // Instant Audio & Visual Feedback
-            playSfx();
+            // Visual Feedback
             createRipple(e);
             
             // Logic
@@ -191,6 +158,7 @@
             if (lastClickTime !== 0) {
                 const interval = now - lastClickTime;
                 intervals.push(interval);
+                // Keep only last 50 intervals for consistency calculation
                 if (intervals.length > 50) intervals.shift();
             }
 
@@ -203,6 +171,7 @@
             const ripple = document.createElement('div');
             ripple.className = 'ripple';
             
+            // Handle both touch/mouse and keyboard (centered)
             const rect = clickTarget.getBoundingClientRect();
             let x, y;
 
@@ -225,11 +194,15 @@
 
         function updateStats() {
             const now = performance.now();
+            // Filter timestamps within the last 1 second
             clickTimestamps = clickTimestamps.filter(t => now - t < 1000);
             
             const currentCps = clickTimestamps.length;
             if (currentCps > maxCps) maxCps = currentCps;
 
+            // Consistency Calculation
+            // Consistency % = 100 - (Coefficient of Variation)
+            // CV = (Standard Deviation / Mean) * 100
             let consistency = 100;
             if (intervals.length > 5) {
                 const mean = intervals.reduce((a, b) => a + b) / intervals.length;
@@ -239,17 +212,20 @@
                 consistency = Math.max(0, Math.min(100, 100 - (cv * 100)));
             }
 
+            // UI Updates
             cpsDisplay.innerText = currentCps.toFixed(1);
             maxCpsDisplay.innerText = maxCps.toFixed(1);
             consistencyDisplay.innerText = Math.round(consistency) + "%";
             totalClicksDisplay.innerText = parseInt(totalClicksDisplay.innerText) + 1;
 
+            // Visualizer update
             const barIdx = Math.floor((now / 50) % BAR_COUNT);
             const height = Math.min(100, currentCps * 8);
             bars[barIdx].style.height = `${height}%`;
             bars[barIdx].style.opacity = '1';
         }
 
+        // Decay function to handle CPS dropping when not clicking
         setInterval(() => {
             const now = performance.now();
             const oldLength = clickTimestamps.length;
@@ -266,6 +242,7 @@
                 }
             }
 
+            // Dim old bars
             bars.forEach(bar => {
                 const currentOpacity = parseFloat(getComputedStyle(bar).opacity);
                 if (currentOpacity > 0.1) {
@@ -289,23 +266,15 @@
         });
 
         window.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() === 'w' || e.key === 'ArrowUp') {
-                if (e.key.toLowerCase() === 'w') {
-                    keyW.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-                } else {
-                    keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
-                }
-                // SFX on Instant Release
-                playSfx();
+            if (e.key.toLowerCase() === 'w') {
+                keyW.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
+            } else if (e.key === 'ArrowUp') {
+                keyUp.classList.remove('bg-sky-500/20', 'border-sky-500', 'text-sky-400');
             }
         });
 
         clickTarget.addEventListener('mousedown', (e) => {
             registerClick(e);
-        });
-
-        clickTarget.addEventListener('mouseup', () => {
-            playSfx();
         });
 
         resetBtn.addEventListener('click', () => {
